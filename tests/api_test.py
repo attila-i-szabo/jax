@@ -491,6 +491,7 @@ class CPPJitTest(jtu.BufferDonationTestCase):
         raise NotImplementedError(
             "A Python error is as is, without stack trace")
 
+    jitted_f(1, HashableWithoutEq())
     with self.assertRaisesRegex(
         ValueError,
         re.escape("static arguments should be comparable using __eq__")):
@@ -827,6 +828,23 @@ class CPPJitTest(jtu.BufferDonationTestCase):
 
     with self.assertRaisesRegex(TypeError, "'<' not supported.*"):
       f({E.A: 1.0, E.B: 2.0})
+
+
+  @unittest.skipIf(jax._src.lib._xla_extension_version < 55,
+                   "requires jaxlib >= 0.1.76")
+  def test_jit_static_argnums_requires_type_equality(self):
+    @partial(self.jit, static_argnums=(0,))
+    def f(k):
+      assert python_should_be_executing
+      return k
+
+    # Values of 'x' that compare as equal but have different types do not lead
+    # to cache hits.
+    for x in [1, True, 1.0]:
+      python_should_be_executing = True
+      self.assertEqual(x, f(x))
+      python_should_be_executing = False
+      self.assertEqual(x, f(x))
 
 
 class PythonJitTest(CPPJitTest):
